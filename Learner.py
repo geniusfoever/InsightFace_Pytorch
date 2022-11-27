@@ -27,7 +27,11 @@ class face_learner(object):
         else:
             self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode)
             print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
+        for param in self.model.input_layer.parameters():
+            param.requires_grad = False
 
+        for param in self.model.body.parameters():
+            param.requires_grad = False
         self.model=nn.DataParallel(self.model,device_ids=device_id).to(conf.device)
         print(self.model)
 
@@ -72,15 +76,15 @@ class face_learner(object):
         else:
             save_path = conf.model_path
         torch.save(
-            self.model.state_dict(), save_path /
-            ('model_{}_accuracy:{}_step:{}_{}.pth'.format(get_time(), accuracy, self.step, extra)))
+            self.model.state_dict(), os.path.join(save_path,
+            ('model_{}_accuracy-{}_step-{}_{}.pth'.format(get_time(), accuracy, self.step, extra))))
         if not model_only:
             torch.save(
-                self.head.state_dict(), save_path /
-                ('head_{}_accuracy:{}_step:{}_{}.pth'.format(get_time(), accuracy, self.step, extra)))
+                self.head.state_dict(), os.path.join(save_path,
+                ('head_{}_accuracy-{}_step-{}_{}.pth'.format(get_time(), accuracy, self.step, extra))))
             torch.save(
-                self.optimizer.state_dict(), save_path /
-                ('optimizer_{}_accuracy:{}_step:{}_{}.pth'.format(get_time(), accuracy, self.step, extra)))
+                self.optimizer.state_dict(), os.path.join(save_path ,
+                ('optimizer_{}_accuracy-{}_step-{}_{}.pth'.format(get_time(), accuracy, self.step, extra))))
     
     def load_state(self, conf, fixed_str, from_save_folder=False, model_only=False, from_multiple_GPU=False):
         if from_save_folder:

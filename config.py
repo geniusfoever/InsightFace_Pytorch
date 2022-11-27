@@ -6,9 +6,9 @@ from torchvision import transforms as trans
 
 def get_config(training = True):
     conf = edict()
-    conf.data_path = Path('D:/Dataset')
+    conf.data_path = Path('C:/Dataset')
     conf.work_path = Path('D:/Model/Pytorch_IF')
-    conf.model_path = "D:/Model/Pytorch_IF"
+    conf.model_path = Path("D:/Model/Pytorch_IF")
     # conf.model_path = conf.work_path/'models'
     conf.log_path = conf.work_path/'log'
     conf.save_path = conf.work_path/'save'
