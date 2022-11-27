@@ -29,5 +29,6 @@ if __name__ == '__main__':
     conf.num_workers = args.num_workers
     conf.data_mode = args.data_mode
     learner = face_learner(conf)
-    learner.load_state(conf,"ir_se50.pth",False,True,False)
+    learner.load_state(conf,"ir_se50.pth.pth",True,True,False)
+    learner.load_state(conf,"2022-11-27-18-42_accuracy-0.9362857142857143_step-1722_None.pth",False,False,True)
     learner.train(conf, args.epochs)

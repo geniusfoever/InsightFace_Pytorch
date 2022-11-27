@@ -92,14 +92,17 @@ class face_learner(object):
         else:
             save_path = conf.model_path
         state_dict=torch.load(os.path.join(save_path,'model_{}'.format(fixed_str)))
+        # if from_multiple_GPU:
+        #     from collections import OrderedDict
+        #     new_state_dict = OrderedDict()
+        #     for k, v in state_dict.items():
+        #         name = k[7:]
+        #         new_state_dict[name] = v
+        #     state_dict=new_state_dict
         if from_multiple_GPU:
-            from collections import OrderedDict
-            new_state_dict = OrderedDict()
-            for k, v in state_dict.items():
-                name = k[7:]
-                new_state_dict[name] = v
-            state_dict=new_state_dict
-        self.model.module.load_state_dict(state_dict)
+            self.model.load_state_dict(state_dict)
+        else:
+            self.model.module.load_state_dict(state_dict)
         if not model_only:
             self.head.load_state_dict(torch.load(os.path.join(save_path,'head_{}'.format(fixed_str))))
             self.optimizer.load_state_dict(torch.load(os.path.join(save_path,'optimizer_{}'.format(fixed_str))))
