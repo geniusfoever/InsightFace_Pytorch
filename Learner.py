@@ -42,7 +42,7 @@ class face_learner(object):
             if conf.use_mobilfacenet:
                 self.optimizer = optim.SGD([
                                     {'params': paras_wo_bn[:-1], 'weight_decay': 4e-5},
-                                    {'params': [paras_wo_bn[-1]] + [self.head.kernel], 'weight_decay': 4e-4},
+                                    {'params': [paras_wo_bn[-1]] + [self.head.model.kernel], 'weight_decay': 4e-4},
                                     {'params': paras_only_bn}
                                 ], lr = conf.lr, momentum = conf.momentum)
             else:
