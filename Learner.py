@@ -14,6 +14,7 @@ from utils import get_time, gen_plot, hflip_batch, separate_bn_paras
 from PIL import Image
 from torchvision import transforms as trans
 import math
+import torch.nn as nn
 import bcolz
 
 class face_learner(object):
@@ -23,16 +24,16 @@ class face_learner(object):
             self.model = MobileFaceNet(conf.embedding_size).to(conf.device)
             print('MobileFaceNet model generated')
         else:
-            self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode).to(conf.device)
+            self.model = nn.DataParallel(Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode)).to(conf.device)
             print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
-        
+
         if not inference:
             self.milestones = conf.milestones
             self.loader, self.class_num = get_train_loader(conf)        
 
             self.writer = SummaryWriter(conf.log_path)
             self.step = 0
-            self.head = Arcface(embedding_size=conf.embedding_size, classnum=self.class_num).to(conf.device)
+            self.head = nn.DataParallel(Arcface(embedding_size=conf.embedding_size, classnum=self.class_num)).to(conf.device)
 
             print('two model heads generated')
 
