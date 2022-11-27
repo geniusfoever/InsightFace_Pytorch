@@ -11,8 +11,8 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--epochs", help="training epochs", default=20, type=int)
     parser.add_argument("-net", "--net_mode", help="which network, [ir, ir_se, mobilefacenet]",default='ir_se', type=str)
     parser.add_argument("-depth", "--net_depth", help="how many layers [50,100,152]", default=50, type=int)
-    parser.add_argument('-lr','--lr',help='learning rate',default=1e-1, type=float)
-    parser.add_argument("-b", "--batch_size", help="batch_size", default=256, type=int)
+    parser.add_argument('-lr','--lr',help='learning rate',default=1e-2, type=float)
+    parser.add_argument("-b", "--batch_size", help="batch_size", default=512, type=int)
     parser.add_argument("-w", "--num_workers", help="workers number", default=6, type=int)
     parser.add_argument("-d", "--data_mode", help="use which database, [vgg, ms1m, emore, concat]",default='ms1m', type=str)
     args = parser.parse_args()
@@ -29,6 +29,19 @@ if __name__ == '__main__':
     conf.num_workers = args.num_workers
     conf.data_mode = args.data_mode
     learner = face_learner(conf)
-    learner.load_state(conf,"ir_se50.pth.pth",True,True,False)
-    learner.load_state(conf,"2022-11-27-18-42_accuracy-0.9362857142857143_step-1722_None.pth",False,False,True)
-    learner.train(conf, args.epochs)
+    learner.load_state(conf,"ir_se50.pth",True,True,True)
+    # learner.load_state(conf,"2022-11-27-18-42_accuracy-0.9362857142857143_step-1722_None.pth",False,False,True)
+    print(conf.batch_size,"*"*10)
+    while True:
+        try:
+            learner.train(conf, args.epochs)
+        except Exception as e:
+            print("*"*40,"\n",e,"*"*40,"\n")
+            try:
+                learner = face_learner(conf)
+                learner.load_state(conf,"ir_se50.pth",False,False,True)
+            except Exception as e:
+                print("-"*40,"\n",e,"-"*40,"\n")
+                learner = face_learner(conf)
+                learner.load_state(conf,"ir_se50.pth",True,True,True)
+

@@ -33,7 +33,6 @@ class face_learner(object):
         for param in self.model.body.parameters():
             param.requires_grad = False
         self.model=nn.DataParallel(self.model,device_ids=device_id).to(conf.device)
-        print(self.model)
 
         if not inference:
             self.milestones = conf.milestones
@@ -43,7 +42,6 @@ class face_learner(object):
             self.step = 0
             self.head = nn.DataParallel(Arcface(embedding_size=conf.embedding_size, classnum=self.class_num),device_ids=device_id).to(conf.device)
 
-            print(self.head)
             print('two model heads generated')
 
             paras_only_bn, paras_wo_bn = separate_bn_paras(self.model.module)
@@ -59,7 +57,8 @@ class face_learner(object):
                                     {'params': paras_wo_bn + [self.head.module.kernel], 'weight_decay': 5e-4},
                                     {'params': paras_only_bn}
                                 ], lr = conf.lr, momentum = conf.momentum)
-            print(self.optimizer)
+
+            self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=0.5)
 #             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=40, verbose=True)
 
             print('optimizers generated')    
@@ -85,13 +84,29 @@ class face_learner(object):
             torch.save(
                 self.optimizer.state_dict(), os.path.join(save_path ,
                 ('optimizer_{}_accuracy-{}_step-{}_{}.pth'.format(get_time(), accuracy, self.step, extra))))
-    
+
+        torch.save(
+            self.model.state_dict(), os.path.join(save_path,
+                                                  ('model_ir_se50.pth'.format(get_time(), accuracy,
+                                                                                                self.step, extra))))
+        if not model_only:
+            torch.save(
+                self.head.state_dict(), os.path.join(save_path,
+                                                     ('head_ir_se50.pth'.format(get_time(), accuracy,
+                                                                                                  self.step, extra))))
+            torch.save(
+                self.optimizer.state_dict(), os.path.join(save_path,
+                                                          ('optimizer_ir_se50.pth'.format(get_time(),
+                                                                                                            accuracy,
+                                                                                                            self.step,
+                                                                                                            extra))))
+
     def load_state(self, conf, fixed_str, from_save_folder=False, model_only=False, from_multiple_GPU=False):
         if from_save_folder:
             save_path = conf.save_path
         else:
             save_path = conf.model_path
-        state_dict=torch.load(os.path.join(save_path,'model_{}'.format(fixed_str)))
+        state_dict=torch.load(os.path.join(save_path,'model_{}'.format(fixed_str)),map_location='cuda')
         # if from_multiple_GPU:
         #     from collections import OrderedDict
         #     new_state_dict = OrderedDict()
@@ -209,12 +224,12 @@ class face_learner(object):
         running_loss = 0.            
         for e in range(epochs):
             print('epoch {} started'.format(e))
-            if e == self.milestones[0]:
-                self.schedule_lr()
-            if e == self.milestones[1]:
-                self.schedule_lr()      
-            if e == self.milestones[2]:
-                self.schedule_lr()                                 
+            # if e == self.milestones[0]:
+            #     self.schedule_lr()
+            # if e == self.milestones[1]:
+            #     self.schedule_lr()
+            # if e == self.milestones[2]:
+            #     self.schedule_lr()
             for imgs, labels in tqdm(iter(self.loader)):
                 imgs = imgs.to(conf.device)
                 labels = labels.to(conf.device)
@@ -225,7 +240,7 @@ class face_learner(object):
                 loss.backward()
                 running_loss += loss.item()
                 self.optimizer.step()
-                
+                self.scheduler.step()
                 if self.step % self.board_loss_every == 0 and self.step != 0:
                     loss_board = running_loss / self.board_loss_every
                     self.writer.add_scalar('train_loss', loss_board, self.step)
