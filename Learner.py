@@ -1,3 +1,5 @@
+import os
+
 from data.data_pipe import de_preprocess, get_train_loader, get_val_data
 from model import Backbone, Arcface, MobileFaceNet, Am_softmax, l2_norm
 from verifacation import evaluate
@@ -74,15 +76,23 @@ class face_learner(object):
                 self.optimizer.state_dict(), save_path /
                 ('optimizer_{}_accuracy:{}_step:{}_{}.pth'.format(get_time(), accuracy, self.step, extra)))
     
-    def load_state(self, conf, fixed_str, from_save_folder=False, model_only=False):
+    def load_state(self, conf, fixed_str, from_save_folder=False, model_only=False, from_multiple_GPU=False):
         if from_save_folder:
             save_path = conf.save_path
         else:
-            save_path = conf.model_path            
-        self.model.load_state_dict(torch.load(save_path/'model_{}'.format(fixed_str)))
+            save_path = conf.model_path
+        state_dict=torch.load(os.path.join(save_path,'model_{}'.format(fixed_str)))
+        if from_multiple_GPU:
+            from collections import OrderedDict
+            new_state_dict = OrderedDict()
+            for k, v in state_dict.items():
+                name = k[7:]
+                new_state_dict[name] = v
+            state_dict=new_state_dict
+        self.model.load_state_dict(state_dict)
         if not model_only:
-            self.head.load_state_dict(torch.load(save_path/'head_{}'.format(fixed_str)))
-            self.optimizer.load_state_dict(torch.load(save_path/'optimizer_{}'.format(fixed_str)))
+            self.head.load_state_dict(torch.load(os.path.join(save_path,'head_{}'.format(fixed_str))))
+            self.optimizer.load_state_dict(torch.load(os.path.join(save_path,'optimizer_{}'.format(fixed_str))))
         
     def board_val(self, db_name, accuracy, best_threshold, roc_curve_tensor):
         self.writer.add_scalar('{}_accuracy'.format(db_name), accuracy, self.step)

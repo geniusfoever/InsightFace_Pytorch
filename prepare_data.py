@@ -11,7 +11,7 @@ if __name__ == '__main__':
     rec_path = conf.data_path/args.rec_path
     load_mx_rec(rec_path)
     
-    bin_files = ['agedb_30', 'cfp_fp', 'lfw', 'calfw', 'cfp_ff', 'cplfw', 'vgg2_fp']
+    bin_files = ['agedb_30', 'cfp_fp', 'lfw'] #, 'calfw', 'cfp_ff', 'cplfw', 'vgg2_fp']
     
     for i in range(len(bin_files)):
         load_bin(rec_path/(bin_files[i]+'.bin'), rec_path/bin_files[i], conf.test_transform)
