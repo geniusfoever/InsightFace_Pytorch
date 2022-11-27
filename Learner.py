@@ -18,14 +18,18 @@ import torch.nn as nn
 import bcolz
 
 class face_learner(object):
-    def __init__(self, conf, inference=False):
+    def __init__(self, conf, load=None,inference=False):
+        device_id=[0,1]
         print(conf)
         if conf.use_mobilfacenet:
             self.model = MobileFaceNet(conf.embedding_size).to(conf.device)
             print('MobileFaceNet model generated')
         else:
-            self.model = nn.DataParallel(Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode)).to(conf.device)
+            self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode)
             print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
+
+        self.model=nn.DataParallel(self.model,device_ids=device_id).to(conf.device)
+        print(self.model)
 
         if not inference:
             self.milestones = conf.milestones
@@ -33,21 +37,22 @@ class face_learner(object):
 
             self.writer = SummaryWriter(conf.log_path)
             self.step = 0
-            self.head = nn.DataParallel(Arcface(embedding_size=conf.embedding_size, classnum=self.class_num)).to(conf.device)
+            self.head = nn.DataParallel(Arcface(embedding_size=conf.embedding_size, classnum=self.class_num),device_ids=device_id).to(conf.device)
 
+            print(self.head)
             print('two model heads generated')
 
-            paras_only_bn, paras_wo_bn = separate_bn_paras(self.model)
-            
+            paras_only_bn, paras_wo_bn = separate_bn_paras(self.model.module)
+
             if conf.use_mobilfacenet:
                 self.optimizer = optim.SGD([
                                     {'params': paras_wo_bn[:-1], 'weight_decay': 4e-5},
-                                    {'params': [paras_wo_bn[-1]] + [self.head.model.kernel], 'weight_decay': 4e-4},
+                                    {'params': [paras_wo_bn[-1]] + [self.head.module.kernel], 'weight_decay': 4e-4},
                                     {'params': paras_only_bn}
                                 ], lr = conf.lr, momentum = conf.momentum)
             else:
                 self.optimizer = optim.SGD([
-                                    {'params': paras_wo_bn + [self.head.kernel], 'weight_decay': 5e-4},
+                                    {'params': paras_wo_bn + [self.head.module.kernel], 'weight_decay': 5e-4},
                                     {'params': paras_only_bn}
                                 ], lr = conf.lr, momentum = conf.momentum)
             print(self.optimizer)
@@ -90,7 +95,7 @@ class face_learner(object):
                 name = k[7:]
                 new_state_dict[name] = v
             state_dict=new_state_dict
-        self.model.load_state_dict(state_dict)
+        self.model.module.load_state_dict(state_dict)
         if not model_only:
             self.head.load_state_dict(torch.load(os.path.join(save_path,'head_{}'.format(fixed_str))))
             self.optimizer.load_state_dict(torch.load(os.path.join(save_path,'optimizer_{}'.format(fixed_str))))
