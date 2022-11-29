@@ -7,6 +7,7 @@ from torchvision import transforms as trans
 def get_config(training = True):
     conf = edict()
     conf.data_path = Path('C:/Dataset')
+    conf.dataset_id=0
     conf.work_path = Path('D:/Model/Pytorch_IF')
     conf.model_path = Path("D:/Model/Pytorch_IF")
     # conf.model_path = conf.work_path/'models'
@@ -37,7 +38,7 @@ def get_config(training = True):
         conf.lr = 1e-1
         conf.milestones = [20,150,1800]
         conf.momentum = 0.9
-        conf.pin_memory = True
+        conf.pin_memory = False
 #         conf.num_workers = 4 # when batchsize is 200
         conf.num_workers = 3
         conf.ce_loss = CrossEntropyLoss()    

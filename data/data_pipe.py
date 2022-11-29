@@ -27,8 +27,9 @@ def get_train_dataset(imgs_folder):
 
 def get_train_loader(conf):
     if conf.data_mode in ['ms1m', 'concat']:
-        ms1m_ds, ms1m_class_num = get_train_dataset(conf.ms1m_folder/'imgs')
-        print('ms1m loader generated')
+
+        ms1m_ds, ms1m_class_num = get_train_dataset(conf.ms1m_folder/('imgs'+str(conf.dataset_id)))
+        print('ms1m {} loader generated'.format(conf.dataset_id))
     if conf.data_mode in ['vgg', 'concat']:
         vgg_ds, vgg_class_num = get_train_dataset(conf.vgg_folder/'imgs')
         print('vgg loader generated')        
