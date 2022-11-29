@@ -17,6 +17,7 @@ import math
 import torch.nn as nn
 import bcolz
 
+
 class face_learner(object):
     def __init__(self, conf, load=None,inference=False):
         device_id=[0,1]
@@ -61,7 +62,7 @@ class face_learner(object):
             self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=0.5)
 #             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=40, verbose=True)
 
-            print('optimizers generated')    
+            print('optimizers generated')
             self.board_loss_every = len(self.loader)//100
             self.evaluate_every = len(self.loader)//10
             self.save_every = len(self.loader)//5
@@ -258,7 +259,13 @@ class face_learner(object):
                     self.save_state(conf, accuracy)
                     
                 self.step += 1
-                
+            conf.dataset_id+=1
+            conf.dataset_id%=10
+            print("Set Dataset_id: {}".format(conf.dataset_id))
+            self.loader, self.class_num = get_train_loader(conf)
+            self.board_loss_every = len(self.loader)//100
+            self.evaluate_every = len(self.loader)//10
+            self.save_every = len(self.loader)//5
         self.save_state(conf, accuracy, to_save_folder=True, extra='final')
 
     def schedule_lr(self):
