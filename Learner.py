@@ -28,11 +28,7 @@ class face_learner(object):
         else:
             self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode)
             print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
-       # for param in self.model.input_layer.parameters():
-          #  param.requires_grad = False
 
-        #for param in self.model.body.parameters():
-           # param.requires_grad = False
         self.model=nn.DataParallel(self.model,device_ids=device_id).to(conf.device)
 
         if not inference:
@@ -59,18 +55,24 @@ class face_learner(object):
                                     {'params': paras_only_bn}
                                 ], lr = conf.lr, momentum = conf.momentum)
 
+            # self.schedule_lr(set_to=1)
             #self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=0.5)
-            self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=40, verbose=True)
+            self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=5,factor=0.5,mode='min')
 
             print('optimizers generated')
-            self.board_loss_every = len(self.loader)//100
-            self.evaluate_every = len(self.loader)//10
-            self.save_every = len(self.loader)//5
+            self.define_interval()
             # self.agedb_30, self.cfp_fp, self.lfw, self.agedb_30_issame, self.cfp_fp_issame, self.lfw_issame = get_val_data(self.loader.dataset.root.parent)
             self.lfw, self.lfw_issame = get_val_data(self.loader.dataset.root.parent)
         else:
             self.threshold = conf.threshold
-    
+
+        self.init_head=False
+
+    def define_interval(self):
+
+        self.board_loss_every = 100
+        self.evaluate_every = len(self.loader) // 5
+        self.save_every = len(self.loader) // 5
     def save_state(self, conf, accuracy, to_save_folder=False, extra=None, model_only=False):
         if to_save_folder:
             save_path = conf.save_path
@@ -104,11 +106,13 @@ class face_learner(object):
                                                                                                             extra))))
 
     def load_state(self, conf, fixed_str, from_save_folder=False, model_only=False, from_multiple_GPU=False):
+        self.init_head=model_only
         if from_save_folder:
             save_path = conf.save_path
         else:
             save_path = conf.model_path
         state_dict=torch.load(os.path.join(save_path,'model_{}'.format(fixed_str)),map_location='cuda')
+        print("Load Model: ",os.path.join(save_path,'model_{}'.format(fixed_str)))
         # if from_multiple_GPU:
         #     from collections import OrderedDict
         #     new_state_dict = OrderedDict()
@@ -117,12 +121,22 @@ class face_learner(object):
         #         new_state_dict[name] = v
         #     state_dict=new_state_dict
         if from_multiple_GPU:
-            self.model.load_state_dict(state_dict)
+            self.model.module.load_state_dict(state_dict)
         else:
             self.model.module.load_state_dict(state_dict)
         if not model_only:
-            self.head.load_state_dict(torch.load(os.path.join(save_path,'head_{}'.format(fixed_str))))
-            self.optimizer.load_state_dict(torch.load(os.path.join(save_path,'optimizer_{}'.format(fixed_str))))
+            self.head.load_state_dict(torch.load(os.path.join(save_path,'head_{}'.format(fixed_str)),map_location='cuda'))
+            self.optimizer.load_state_dict(torch.load(os.path.join(save_path,'optimizer_{}'.format(fixed_str)),map_location='cuda'))
+        else:
+            self.schedule_lr(set_to=1)
+            for param in self.model.module.input_layer.parameters():
+                param.requires_grad = False
+
+            for param in self.model.module.body.parameters():
+                param.requires_grad = False
+
+            for param in self.model.module.output_layer.parameters():
+                param.requires_grad = False
         
     def board_val(self, db_name, accuracy, best_threshold, roc_curve_tensor):
         self.writer.add_scalar('{}_accuracy'.format(db_name), accuracy, self.step)
@@ -222,10 +236,10 @@ class face_learner(object):
     #             return log_lrs, losses
 
     def train(self, conf, epochs):
-        self.model.train()
-        running_loss = 0.            
+        running_loss = 0.
         for e in range(epochs):
 
+            self.model.train()
             print("Set Learning Rate:",self.optimizer.param_groups[0]['lr'])
             print("Set Learning Rate: {}".format(self.optimizer.param_groups[1]['lr']))
             print('epoch {} started'.format(e))
@@ -239,7 +253,7 @@ class face_learner(object):
             #     self.schedule_lr()
             # if e == self.milestones[2]:
             #     self.schedule_lr()
-            for imgs, labels in tqdm(iter(self.loader)):
+            for imgs, labels in tqdm(pbar := iter(self.loader)):
                 imgs = imgs.to(conf.device)
                 labels = labels.to(conf.device)
                 self.optimizer.zero_grad()
@@ -252,6 +266,8 @@ class face_learner(object):
                 if self.step % self.board_loss_every == 0 and self.step != 0:
                     loss_board = running_loss / self.board_loss_every
                     self.writer.add_scalar('train_loss', loss_board, self.step)
+                    pbar.set_description(f"Loss {loss_board}")
+                    self.scheduler.step(loss_board)
                     running_loss = 0.
                 
                 if self.step % self.evaluate_every == 0 and self.step != 0:
@@ -264,7 +280,27 @@ class face_learner(object):
                     self.model.train()
                 if self.step % self.save_every == 0 and self.step != 0:
                     self.save_state(conf, accuracy)
-                    
+
+                if self.init_head:
+                    # if self.step%10==0:
+                    #     self.schedule_lr()
+                    if self.step==100:
+                        for param in self.model.module.output_layer.parameters():
+                            param.requires_grad = True
+                    if self.step>200:
+                        print("Init Head Finished")
+                        self.schedule_lr(set_to=conf.lr)
+                        self.init_head=False
+                        for param in self.model.module.input_layer.parameters():
+                            param.requires_grad = True
+
+                        for param in self.model.module.body.parameters():
+                            param.requires_grad = True
+
+                        for param in self.model.module.output_layer.parameters():
+                            param.requires_grad = True
+                # elif self.step%100==0:
+                #     self.schedule_lr(gamma=0.8)
                 self.step += 1
 
 
@@ -273,19 +309,17 @@ class face_learner(object):
             print("Set Dataset_id: {}".format(conf.dataset_id))
             print("Accuracy: {}".format(accuracy))
             self.loader, self.class_num = get_train_loader(conf)
-            self.board_loss_every = len(self.loader)//1
-            self.evaluate_every = len(self.loader)//1
-            self.save_every = len(self.loader)//1
 
-            self.scheduler.step()
-            print(self.optimizer)
         self.save_state(conf, accuracy, to_save_folder=True, extra='final')
 
-    def schedule_lr(self):
+    def schedule_lr(self,set_to=None,gamma=0.5):
         print(self.optimizer)
         for params in self.optimizer.param_groups:
             print(params['lr'])
-            lr=params['lr']/2
+            if set_to:
+                lr=params['lr']=set_to
+            else:
+                lr=params['lr']*gamma
             print(lr)
             params['lr'] = lr
         print(self.optimizer)
