@@ -253,7 +253,7 @@ class face_learner(object):
             #     self.schedule_lr()
             # if e == self.milestones[2]:
             #     self.schedule_lr()
-            for imgs, labels in tqdm(pbar := iter(self.loader)):
+            for imgs, labels in (pbar := tqdm(iter(self.loader))):
                 imgs = imgs.to(conf.device)
                 labels = labels.to(conf.device)
                 self.optimizer.zero_grad()
@@ -284,10 +284,10 @@ class face_learner(object):
                 if self.init_head:
                     # if self.step%10==0:
                     #     self.schedule_lr()
-                    if self.step==100:
+                    if self.step==700:
                         for param in self.model.module.output_layer.parameters():
                             param.requires_grad = True
-                    if self.step>200:
+                    if self.step>1000:
                         print("Init Head Finished")
                         self.schedule_lr(set_to=conf.lr)
                         self.init_head=False
