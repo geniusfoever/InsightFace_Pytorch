@@ -28,11 +28,11 @@ class face_learner(object):
         else:
             self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode)
             print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
-        for param in self.model.input_layer.parameters():
-            param.requires_grad = False
+       # for param in self.model.input_layer.parameters():
+          #  param.requires_grad = False
 
-        for param in self.model.body.parameters():
-            param.requires_grad = False
+        #for param in self.model.body.parameters():
+           # param.requires_grad = False
         self.model=nn.DataParallel(self.model,device_ids=device_id).to(conf.device)
 
         if not inference:
@@ -43,7 +43,7 @@ class face_learner(object):
             self.step = 0
             self.head = nn.DataParallel(Arcface(embedding_size=conf.embedding_size, classnum=self.class_num),device_ids=device_id).to(conf.device)
 
-            print('two model heads generated')
+            print('two model heads generated',conf.lr)
 
             paras_only_bn, paras_wo_bn = separate_bn_paras(self.model.module)
 
@@ -59,14 +59,15 @@ class face_learner(object):
                                     {'params': paras_only_bn}
                                 ], lr = conf.lr, momentum = conf.momentum)
 
-            self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=0.5)
-#             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=40, verbose=True)
+            #self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=0.5)
+            self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=40, verbose=True)
 
             print('optimizers generated')
             self.board_loss_every = len(self.loader)//100
             self.evaluate_every = len(self.loader)//10
             self.save_every = len(self.loader)//5
-            self.agedb_30, self.cfp_fp, self.lfw, self.agedb_30_issame, self.cfp_fp_issame, self.lfw_issame = get_val_data(self.loader.dataset.root.parent)
+            # self.agedb_30, self.cfp_fp, self.lfw, self.agedb_30_issame, self.cfp_fp_issame, self.lfw_issame = get_val_data(self.loader.dataset.root.parent)
+            self.lfw, self.lfw_issame = get_val_data(self.loader.dataset.root.parent)
         else:
             self.threshold = conf.threshold
     
@@ -87,16 +88,16 @@ class face_learner(object):
                 ('optimizer_{}_accuracy-{}_step-{}_{}.pth'.format(get_time(), accuracy, self.step, extra))))
 
         torch.save(
-            self.model.state_dict(), os.path.join(save_path,
+            self.model.state_dict(), os.path.join(conf.save_path,
                                                   ('model_ir_se50.pth'.format(get_time(), accuracy,
                                                                                                 self.step, extra))))
         if not model_only:
             torch.save(
-                self.head.state_dict(), os.path.join(save_path,
+                self.head.state_dict(), os.path.join(conf.save_path,
                                                      ('head_ir_se50.pth'.format(get_time(), accuracy,
                                                                                                   self.step, extra))))
             torch.save(
-                self.optimizer.state_dict(), os.path.join(save_path,
+                self.optimizer.state_dict(), os.path.join(conf.save_path,
                                                           ('optimizer_ir_se50.pth'.format(get_time(),
                                                                                                             accuracy,
                                                                                                             self.step,
@@ -159,74 +160,81 @@ class face_learner(object):
         roc_curve_tensor = trans.ToTensor()(roc_curve)
         return accuracy.mean(), best_thresholds.mean(), roc_curve_tensor
     
-    def find_lr(self,
-                conf,
-                init_value=1e-8,
-                final_value=10.,
-                beta=0.98,
-                bloding_scale=3.,
-                num=None):
-        if not num:
-            num = len(self.loader)
-        mult = (final_value / init_value)**(1 / num)
-        lr = init_value
-        for params in self.optimizer.param_groups:
-            params['lr'] = lr
-        self.model.train()
-        avg_loss = 0.
-        best_loss = 0.
-        batch_num = 0
-        losses = []
-        log_lrs = []
-        for i, (imgs, labels) in tqdm(enumerate(self.loader), total=num):
-
-            imgs = imgs.to(conf.device)
-            labels = labels.to(conf.device)
-            batch_num += 1          
-
-            self.optimizer.zero_grad()
-
-            embeddings = self.model(imgs)
-            thetas = self.head(embeddings, labels)
-            loss = conf.ce_loss(thetas, labels)          
-          
-            #Compute the smoothed loss
-            avg_loss = beta * avg_loss + (1 - beta) * loss.item()
-            self.writer.add_scalar('avg_loss', avg_loss, batch_num)
-            smoothed_loss = avg_loss / (1 - beta**batch_num)
-            self.writer.add_scalar('smoothed_loss', smoothed_loss,batch_num)
-            #Stop if the loss is exploding
-            if batch_num > 1 and smoothed_loss > bloding_scale * best_loss:
-                print('exited with best_loss at {}'.format(best_loss))
-                plt.plot(log_lrs[10:-5], losses[10:-5])
-                return log_lrs, losses
-            #Record the best loss
-            if smoothed_loss < best_loss or batch_num == 1:
-                best_loss = smoothed_loss
-            #Store the values
-            losses.append(smoothed_loss)
-            log_lrs.append(math.log10(lr))
-            self.writer.add_scalar('log_lr', math.log10(lr), batch_num)
-            #Do the SGD step
-            #Update the lr for the next step
-
-            loss.backward()
-            self.optimizer.step()
-
-            lr *= mult
-            for params in self.optimizer.param_groups:
-                params['lr'] = lr
-            if batch_num > num:
-                plt.plot(log_lrs[10:-5], losses[10:-5])
-                return log_lrs, losses    
+    # def find_lr(self,
+    #             conf,
+    #             init_value=1e-8,
+    #             final_value=10.,
+    #             beta=0.98,
+    #             bloding_scale=3.,
+    #             num=None):
+    #     if not num:
+    #         num = len(self.loader)
+    #     mult = (final_value / init_value)**(1 / num)
+    #     lr = init_value
+    #     for params in self.optimizer.param_groups:
+    #         params['lr'] = lr
+    #     self.model.train()
+    #     avg_loss = 0.
+    #     best_loss = 0.
+    #     batch_num = 0
+    #     losses = []
+    #     log_lrs = []
+    #     for i, (imgs, labels) in tqdm(enumerate(self.loader), total=num):
+    #
+    #         imgs = imgs.to(conf.device)
+    #         labels = labels.to(conf.device)
+    #         batch_num += 1
+    #
+    #         self.optimizer.zero_grad()
+    #
+    #         embeddings = self.model(imgs)
+    #         thetas = self.head(embeddings, labels)
+    #         loss = conf.ce_loss(thetas, labels)
+    #
+    #         #Compute the smoothed loss
+    #         avg_loss = beta * avg_loss + (1 - beta) * loss.item()
+    #         self.writer.add_scalar('avg_loss', avg_loss, batch_num)
+    #         smoothed_loss = avg_loss / (1 - beta**batch_num)
+    #         self.writer.add_scalar('smoothed_loss', smoothed_loss,batch_num)
+    #         #Stop if the loss is exploding
+    #         if batch_num > 1 and smoothed_loss > bloding_scale * best_loss:
+    #             print('exited with best_loss at {}'.format(best_loss))
+    #             plt.plot(log_lrs[10:-5], losses[10:-5])
+    #             return log_lrs, losses
+    #         #Record the best loss
+    #         if smoothed_loss < best_loss or batch_num == 1:
+    #             best_loss = smoothed_loss
+    #         #Store the values
+    #         losses.append(smoothed_loss)
+    #         log_lrs.append(math.log10(lr))
+    #         self.writer.add_scalar('log_lr', math.log10(lr), batch_num)
+    #         #Do the SGD step
+    #         #Update the lr for the next step
+    #
+    #         loss.backward()
+    #         self.optimizer.step()
+    #
+    #         lr *= mult
+    #         for params in self.optimizer.param_groups:
+    #             params['lr'] = lr
+    #         if batch_num > num:
+    #             plt.plot(log_lrs[10:-5], losses[10:-5])
+    #             return log_lrs, losses
 
     def train(self, conf, epochs):
         self.model.train()
         running_loss = 0.            
         for e in range(epochs):
+
+            print("Set Learning Rate:",self.optimizer.param_groups[0]['lr'])
+            print("Set Learning Rate: {}".format(self.optimizer.param_groups[1]['lr']))
             print('epoch {} started'.format(e))
             # if e == self.milestones[0]:
-            #     self.schedule_lr()
+            #
+            #
+            #
+            #
+            # self.schedule_lr()
             # if e == self.milestones[1]:
             #     self.schedule_lr()
             # if e == self.milestones[2]:
@@ -241,36 +249,45 @@ class face_learner(object):
                 loss.backward()
                 running_loss += loss.item()
                 self.optimizer.step()
-                self.scheduler.step()
                 if self.step % self.board_loss_every == 0 and self.step != 0:
                     loss_board = running_loss / self.board_loss_every
                     self.writer.add_scalar('train_loss', loss_board, self.step)
                     running_loss = 0.
                 
                 if self.step % self.evaluate_every == 0 and self.step != 0:
-                    accuracy, best_threshold, roc_curve_tensor = self.evaluate(conf, self.agedb_30, self.agedb_30_issame)
-                    self.board_val('agedb_30', accuracy, best_threshold, roc_curve_tensor)
+                    # accuracy, best_threshold, roc_curve_tensor = self.evaluate(conf, self.agedb_30, self.agedb_30_issame)
+                    # self.board_val('agedb_30', accuracy, best_threshold, roc_curve_tensor)
                     accuracy, best_threshold, roc_curve_tensor = self.evaluate(conf, self.lfw, self.lfw_issame)
                     self.board_val('lfw', accuracy, best_threshold, roc_curve_tensor)
-                    accuracy, best_threshold, roc_curve_tensor = self.evaluate(conf, self.cfp_fp, self.cfp_fp_issame)
-                    self.board_val('cfp_fp', accuracy, best_threshold, roc_curve_tensor)
+                    # accuracy, best_threshold, roc_curve_tensor = self.evaluate(conf, self.cfp_fp, self.cfp_fp_issame)
+                    # self.board_val('cfp_fp', accuracy, best_threshold, roc_curve_tensor)
                     self.model.train()
                 if self.step % self.save_every == 0 and self.step != 0:
                     self.save_state(conf, accuracy)
                     
                 self.step += 1
+
+
             conf.dataset_id+=1
             conf.dataset_id%=10
             print("Set Dataset_id: {}".format(conf.dataset_id))
+            print("Accuracy: {}".format(accuracy))
             self.loader, self.class_num = get_train_loader(conf)
-            self.board_loss_every = len(self.loader)//100
-            self.evaluate_every = len(self.loader)//10
-            self.save_every = len(self.loader)//5
+            self.board_loss_every = len(self.loader)//1
+            self.evaluate_every = len(self.loader)//1
+            self.save_every = len(self.loader)//1
+
+            self.scheduler.step()
+            print(self.optimizer)
         self.save_state(conf, accuracy, to_save_folder=True, extra='final')
 
     def schedule_lr(self):
-        for params in self.optimizer.param_groups:                 
-            params['lr'] /= 10
+        print(self.optimizer)
+        for params in self.optimizer.param_groups:
+            print(params['lr'])
+            lr=params['lr']/2
+            print(lr)
+            params['lr'] = lr
         print(self.optimizer)
     
     def infer(self, conf, faces, target_embs, tta=False):

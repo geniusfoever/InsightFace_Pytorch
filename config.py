@@ -6,10 +6,10 @@ from torchvision import transforms as trans
 
 def get_config(training = True):
     conf = edict()
-    conf.data_path = Path('C:/Dataset')
+    conf.data_path = Path('E:/Dataset')
     conf.dataset_id=0
     conf.work_path = Path('D:/Model/Pytorch_IF')
-    conf.model_path = Path("D:/Model/Pytorch_IF")
+    conf.model_path = Path("D:/Model/Pytorch_IF/model")
     # conf.model_path = conf.work_path/'models'
     conf.log_path = conf.work_path/'log'
     conf.save_path = conf.work_path/'save'
@@ -26,8 +26,8 @@ def get_config(training = True):
                 ])
     conf.data_mode = 'ms1m' #'emore'
     conf.vgg_folder = conf.data_path/'faces_vgg_112x112'
-    conf.ms1m_folder = conf.data_path/'glint_umd'
-    conf.emore_folder = conf.data_path/'faces_emore'
+    conf.ms1m_folder = conf.data_path/'glint'
+    conf.emore_folder = conf.data_path/'lfw_test'
     conf.batch_size = 10 # irse net depth 50
 #   conf.batch_size = 200 # mobilefacenet
 #--------------------Training Config ------------------------    
