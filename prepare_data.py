@@ -5,7 +5,7 @@ import argparse
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='for face verification')
-    parser.add_argument("-r", "--rec_path", help="mxnet record file path",default='lfw_test', type=str)
+    parser.add_argument("-r", "--rec_path", help="mxnet record file path",default='glint', type=str)
     args = parser.parse_args()
     conf = get_config()
     rec_path = conf.data_path/args.rec_path

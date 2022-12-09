@@ -73,6 +73,8 @@ class face_learner(object):
         self.board_loss_every = 100
         self.evaluate_every = len(self.loader) // 5
         self.save_every = len(self.loader) // 5
+        self.init_wate_t1 = len(self.loader)*0.8
+        self.init_wate_t2 = len(self.loader)
     def save_state(self, conf, accuracy, to_save_folder=False, extra=None, model_only=False):
         if to_save_folder:
             save_path = conf.save_path
@@ -123,7 +125,7 @@ class face_learner(object):
         if from_multiple_GPU:
             self.model.module.load_state_dict(state_dict)
         else:
-            self.model.module.load_state_dict(state_dict)
+            self.model.load_state_dict(state_dict)
         if not model_only:
             self.head.load_state_dict(torch.load(os.path.join(save_path,'head_{}'.format(fixed_str)),map_location='cuda'))
             self.optimizer.load_state_dict(torch.load(os.path.join(save_path,'optimizer_{}'.format(fixed_str)),map_location='cuda'))
@@ -146,7 +148,7 @@ class face_learner(object):
 #         self.writer.add_scalar('{}_val_std'.format(db_name), val_std, self.step)
 #         self.writer.add_scalar('{}_far:False Acceptance Ratio'.format(db_name), far, self.step)
         
-    def evaluate(self, conf, carray, issame, nrof_folds = 5, tta = False):
+    def evaluate(self, conf, carray, issame, nrof_folds = 5, tta = False,show_img=False):
         self.model.eval()
         idx = 0
         embeddings = np.zeros([len(carray), conf.embedding_size])
@@ -171,6 +173,7 @@ class face_learner(object):
         tpr, fpr, accuracy, best_thresholds = evaluate(embeddings, issame, nrof_folds)
         buf = gen_plot(fpr, tpr)
         roc_curve = Image.open(buf)
+        if show_img:roc_curve.show()
         roc_curve_tensor = trans.ToTensor()(roc_curve)
         return accuracy.mean(), best_thresholds.mean(), roc_curve_tensor
     
@@ -284,10 +287,11 @@ class face_learner(object):
                 if self.init_head:
                     # if self.step%10==0:
                     #     self.schedule_lr()
-                    if self.step==700:
+                    if self.step==self.init_wate_t1:
+                        print("Init Head Stage 2")
                         for param in self.model.module.output_layer.parameters():
                             param.requires_grad = True
-                    if self.step>1000:
+                    if self.step>=self.init_wate_t2:
                         print("Init Head Finished")
                         self.schedule_lr(set_to=conf.lr)
                         self.init_head=False
