@@ -78,6 +78,7 @@ def get_val_data(data_path):
     lfw, lfw_issame = get_val_pair(data_path, 'lfw')
     return lfw,lfw_issame#agedb_30, cfp_fp, lfw, agedb_30_issame, cfp_fp_issame, lfw_issame
 
+
 # def load_mx_rec(rec_path):
 #     save_path = rec_path/'imgs'
 #     if not save_path.exists():

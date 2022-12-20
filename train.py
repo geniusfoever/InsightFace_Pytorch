@@ -35,10 +35,12 @@ if __name__ == '__main__':
     validation=True
     if validation:
         conf.num_workers=1
+        conf.model_only=True
     learner = face_learner(conf)
     if validation:
         learner.load_state(conf,"ir_se50.pth",from_save_folder=True,model_only=conf.model_only,from_multiple_GPU=False)
-        accuracy, best_threshold, roc_curve_tensor =learner.evaluate(conf,learner.lfw,learner.lfw_issame,show_img=True)
+        #learner.load_state(conf,"original.pth",from_save_folder=True,model_only=conf.model_only,from_multiple_GPU=False)
+        accuracy, best_threshold, roc_curve_tensor =learner.evaluate(conf,learner.lfw,learner.lfw_issame,show_img=False)
         print(accuracy,best_threshold,roc_curve_tensor)
     else:
         learner.load_state(conf,"2022-11-27-18-42_accuracy-0.9362857142857143_step-1722_None.pth",False,False,True)

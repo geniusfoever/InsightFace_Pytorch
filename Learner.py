@@ -1,6 +1,6 @@
 import os
 
-from data.data_pipe import de_preprocess, get_train_loader, get_val_data
+from data.data_pipe import de_preprocess, get_train_loader, get_val_data,get_val_pair
 from model import Backbone, Arcface, MobileFaceNet, Am_softmax, l2_norm
 from verifacation import evaluate
 import torch
@@ -16,11 +16,12 @@ from torchvision import transforms as trans
 import math
 import torch.nn as nn
 import bcolz
+from pathlib import Path
+import datetime
 
 
 class face_learner(object):
     def __init__(self, conf, load=None,inference=False):
-        device_id=[0,1]
         print(conf)
         if conf.use_mobilfacenet:
             self.model = MobileFaceNet(conf.embedding_size).to(conf.device)
@@ -29,6 +30,7 @@ class face_learner(object):
             self.model = Backbone(conf.net_depth, conf.drop_ratio, conf.net_mode)
             print('{}_{} model generated'.format(conf.net_mode, conf.net_depth))
 
+        device_id=[0,1]
         self.model=nn.DataParallel(self.model,device_ids=device_id).to(conf.device)
 
         if not inference:
@@ -62,7 +64,8 @@ class face_learner(object):
             print('optimizers generated')
             self.define_interval()
             # self.agedb_30, self.cfp_fp, self.lfw, self.agedb_30_issame, self.cfp_fp_issame, self.lfw_issame = get_val_data(self.loader.dataset.root.parent)
-            self.lfw, self.lfw_issame = get_val_data(self.loader.dataset.root.parent)
+            # self.lfw, self.lfw_issame = get_val_data(self.loader.dataset.root.parent)
+            self.lfw, self.lfw_issame = get_val_pair(Path(r"E:\dataset\lfw\darkened_pair_list"), 'darkened_pair')
         else:
             self.threshold = conf.threshold
 
@@ -173,6 +176,10 @@ class face_learner(object):
         tpr, fpr, accuracy, best_thresholds = evaluate(embeddings, issame, nrof_folds)
         buf = gen_plot(fpr, tpr)
         roc_curve = Image.open(buf)
+        try:
+            roc_curve.save(r"D:\OneDrive - The Hong Kong Polytechnic University\Pictures\Experiment"+f"\\{datetime.datetime.now()}.png".replace(":","_"))
+        except OSError:
+            pass
         if show_img:roc_curve.show()
         roc_curve_tensor = trans.ToTensor()(roc_curve)
         return accuracy.mean(), best_thresholds.mean(), roc_curve_tensor
